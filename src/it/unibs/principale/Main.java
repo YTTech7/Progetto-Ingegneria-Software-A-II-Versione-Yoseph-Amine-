@@ -37,10 +37,11 @@ public class Main {
         ConfigurationService configService  = new ConfigurationService(state);
         FieldService         fieldService   = new FieldService(state);
         CategoryService      categoryService = new CategoryService(state);
-
+        ProposalService      proposalService = new ProposalService(state);
         // ---- 3. Build Controller (gets only Services + UI + PM) ----
         ConfiguratorController controller = new ConfiguratorController(
-                ui, authService, configService, fieldService, categoryService, pm);
+                ui, authService, configService, fieldService,
+                categoryService, proposalService, pm);
 
         // ---- 4. Application loop ----
         boolean running = true;
@@ -74,12 +75,16 @@ public class Main {
                 ui.printMenu(
                     "Gestione Campi Comuni",
                     "Gestione Categorie",
-                    "Visualizza tutte le categorie e i campi"
+                    "Visualizza tutte le categorie e i campi",
+                    "Crea nuova proposta",
+                    "Visualizza bacheca"
                 );
-                switch (ui.readInt("Scelta", 0, 3)) {
+                switch (ui.readInt("Scelta", 0, 5)) {
                     case 1 -> controller.manageCommonFields();
                     case 2 -> controller.manageCategories();
                     case 3 -> controller.viewAllCategories();
+                    case 4 -> controller.handleCreateProposal();
+                    case 5 -> controller.handleViewBoard();
                     case 0 -> {
                         controller.logout();
                         sessionActive = false;

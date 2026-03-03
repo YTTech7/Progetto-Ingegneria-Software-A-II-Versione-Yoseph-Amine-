@@ -4,6 +4,7 @@ import exception.*;
 import model.Category;
 import model.Configurator;
 import model.FieldType;
+import model.Proposal;
 import persistence.PersistenceManager;
 import service.*;
 import view.ConsoleUI;
@@ -34,6 +35,7 @@ public class ConfiguratorController {
     private final ConfigurationService configService;
     private final FieldService         fieldService;
     private final CategoryService      categoryService;
+    private final ProposalService      proposalService;
     private final PersistenceManager   pm;
 
     private Configurator currentConfigurator;
@@ -43,14 +45,16 @@ public class ConfiguratorController {
                                    ConfigurationService configService,
                                    FieldService fieldService,
                                    CategoryService categoryService,
+                                   ProposalService proposalService,
                                    PersistenceManager pm) {
         assert ui != null && authService != null && configService != null
-            && fieldService != null && categoryService != null;
+            && fieldService != null && categoryService != null && proposalService != null && pm != null;
         this.ui              = ui;
         this.authService     = authService;
         this.configService   = configService;
         this.fieldService    = fieldService;
         this.categoryService = categoryService;
+        this.proposalService = proposalService;
         this.pm              = pm;
     }
 
@@ -169,84 +173,102 @@ public class ConfiguratorController {
         ui.printTitle("Definizione Campi Base — Primo Avvio");
         ui.printInfo("Il sistema non ha ancora campi base definiti.");
         ui.printInfo("In quanto primo configuratore, devi definirli ora.");
-        ui.printInfo("Una volta salvati saranno IMMUTABILI per sempre.");
-        ui.printBlank();
-        ui.printInfo("I campi base sono comuni a tutte le categorie e a tutte");
-        ui.printInfo("le iniziative proposte. Ogni proposta dovrà compilarli.");
+        ui.printInfo("I seguenti campi sono stabiliti dalla specifica del sistema.");
+        ui.printInfo("Saranno comuni a tutte le categorie e IMMUTABILI per sempre.");
         ui.printBlank();
         
-        List<model.BaseField> fields = new ArrayList<>();
+        // Mostra i campi predefiniti — il configuratore NON li digita
+        ui.print(String.format("  %-35s | %-15s | %s", "Nome", "Tipo", "Obbligatorio"));
+        ui.print("  " + "-".repeat(62));
+        List<model.BaseField> predefinedFields = new ArrayList<>(service.ConfigurationService.PREDEFINED_BASE_FIELDS);
+        for (model.BaseField f : predefinedFields) {
+            ui.print(String.format("  %-35s | %-15s | %s",
+                f.getName(),
+                f.getType().getDisplayName(),
+                f.isMandatory() ? "Si" : "No"));
+        }
+        ui.printBlank();
         
-        ui.printSection("HINT per la creazione dei campi base");
-        ui.printInfo("Titolo - (Testo) - (Obbligatorio)");
-        ui.printInfo("Descrizione - (Testo) - (Obbligatorio)");
-        ui.printInfo("Data Inizio - (Data) - (Obbligatorio)");
-        ui.printInfo("Data Fine - (Data) - (Obbligatorio)");
-        ui.printInfo("Luogo - (Testo) - (Obbligatorio)");
+        // Permetti di aggiungere campi extra
+        List<model.BaseField> allFields = new ArrayList<>(predefinedFields);
         
-        ui.printSection("Inserisci i campi base uno per uno");
-        ui.printInfo("Premi invio senza scrivere nulla per terminare l'inserimento.");
+        ui.printSection("Aggiunta Campi Extra (opzionale)");
+        ui.printInfo("Puoi ora aggiungere campi personalizzati oltre a quelli predefiniti.");
+        ui.printInfo("Premi invio senza scrivere nulla per saltare e procedere alla conferma.");
         
         while (true) {
             ui.printBlank();
-            ui.print("  Campi inseriti finora: " + fields.size());
+            ui.print("  Campi totali da salvare: " + allFields.size() + " (" + predefinedFields.size() + " predefiniti + " + (allFields.size() - predefinedFields.size()) + " extra)");
 
             // Chiede il nome — stringa vuota = fine inserimento
-            System.out.print("  > Nome del campo (invio per terminare): ");
+            System.out.print("  > Nome del campo extra (invio per terminare): ");
             String name = ui.getScanner().nextLine().trim();
 
             if (name.isEmpty()) {
-                if (fields.isEmpty()) {
-                    ui.printError("Devi inserire almeno un campo base. Riprova.");
-                    continue;
-                }
                 break; // fine inserimento
             }
 
-            // Controlla duplicati
-            boolean duplicate = fields.stream()
+            // Controlla duplicati con tutti i campi (predefiniti + già inseriti)
+            boolean duplicate = allFields.stream()
                     .anyMatch(f -> f.getName().equalsIgnoreCase(name));
             if (duplicate) {
-                ui.printError("Campo '" + name + "' già inserito. Scegli un altro nome.");
+                ui.printError("Campo '" + name + "' già esistente. Scegli un altro nome.");
                 continue;
             }
 
             model.FieldType type    = ui.readFieldType();
             boolean mandatory       = ui.readMandatory();
-            fields.add(new model.BaseField(name, type, mandatory));
-            ui.printSuccess("'" + name + "' aggiunto.");
+            allFields.add(new model.BaseField(name, type, mandatory));
+            ui.printSuccess("'" + name + "' aggiunto come campo extra.");
         }
-
         
-        // Mostra riepilogo prima di confermare
+        // Mostra riepilogo completo prima di confermare
         ui.printBlank();
-        ui.printSection("Riepilogo campi base da salvare (" + fields.size() + " campi)");
-        ui.print(String.format("  %-30s | %-15s | %s", "Nome", "Tipo", "Obbligatorio"));
-        ui.print("  " + "-".repeat(60));
-        for (model.BaseField f : fields) {
-            ui.print(String.format("  %-30s | %-15s | %s",
+        ui.printSection("Riepilogo Completo Campi Base (" + allFields.size() + " campi totali)");
+        
+        // Mostra prima i predefiniti
+        ui.printInfo("Campi predefiniti (immutabili):");
+        ui.print(String.format("  %-35s | %-15s | %s", "Nome", "Tipo", "Obbligatorio"));
+        ui.print("  " + "-".repeat(62));
+        for (model.BaseField f : predefinedFields) {
+            ui.print(String.format("  %-35s | %-15s | %s",
                 f.getName(),
                 f.getType().getDisplayName(),
-                f.isMandatory() ? "Sì" : "No"));
+                f.isMandatory() ? "Si" : "No"));
         }
+        
+        // Poi gli extra se ce ne sono
+        if (allFields.size() > predefinedFields.size()) {
+            ui.printBlank();
+            ui.printInfo("Campi extra aggiunti:");
+            ui.print(String.format("  %-35s | %-15s | %s", "Nome", "Tipo", "Obbligatorio"));
+            ui.print("  " + "-".repeat(62));
+            for (int i = predefinedFields.size(); i < allFields.size(); i++) {
+                model.BaseField f = allFields.get(i);
+                ui.print(String.format("  %-35s | %-15s | %s",
+                    f.getName(),
+                    f.getType().getDisplayName(),
+                    f.isMandatory() ? "Si" : "No"));
+            }
+        }
+        
         ui.printBlank();
-        ui.printWarning("Attenzione: dopo la conferma questi campi non potranno più essere modificati.");
+        ui.printWarning("Dopo la conferma questi campi non potranno piu essere modificati.");
 
         if (!ui.readConfirm("Confermi e salvi i campi base?")) {
-            ui.printInfo("Operazione annullata. I campi base verranno richiesti al prossimo avvio.");
+            ui.printInfo("Operazione annullata. Verra richiesta al prossimo avvio.");
             return false;
         }
 
         try {
-            configService.initBaseFields(fields);
+            configService.initBaseFields(allFields);
             save();
-            ui.printSuccess(fields.size() + " campi base salvati e bloccati definitivamente.");
+            ui.printSuccess(allFields.size() + " campi base salvati e bloccati definitivamente.");
             return true;
         } catch (exception.BaseFieldsAlreadyInitializedException e) {
             ui.printInfo(e.getMessage());
             return true;
         }
-        
     }
     
     
@@ -458,6 +480,116 @@ public class ConfiguratorController {
         ui.printBlank();
     }
    
+ // ================================================================
+    // PROPOSTE  (UC-11, UC-12, UC-13)
+    // ================================================================
+
+    public void handleCreateProposal() {
+        ui.printTitle("Crea Nuova Proposta di Iniziativa");
+
+        Category cat = pickCategory();
+        if (cat == null) return;
+
+        Proposal draft = proposalService.createDraft(cat);
+
+        ui.printSection("Compila i campi — categoria: " + cat.getName());
+        ui.printInfo("Date: gg/mm/aaaa  |  Ore: hh:mm");
+        ui.printBlank();
+
+        ui.printSection("Campi Base");
+        for (var field : configService.getBaseFields()) {
+            String val = readFieldValue(field.getName(), field.getType(), field.isMandatory());
+            draft.setFieldValue(field.getName(), val);
+        }
+
+        if (!fieldService.getCommonFields().isEmpty()) {
+            ui.printSection("Campi Comuni");
+            for (var field : fieldService.getCommonFields()) {
+                String val = readFieldValue(field.getName(), field.getType(), field.isMandatory());
+                draft.setFieldValue(field.getName(), val);
+            }
+        }
+
+        if (!cat.getSpecificFields().isEmpty()) {
+            ui.printSection("Campi Specifici — " + cat.getName());
+            for (var field : cat.getSpecificFields()) {
+                String val = readFieldValue(field.getName(), field.getType(), field.isMandatory());
+                draft.setFieldValue(field.getName(), val);
+            }
+        }
+
+        try {
+            proposalService.validate(draft,
+                    configService.getBaseFields(),
+                    fieldService.getCommonFields());
+        } catch (InvalidProposalException e) {
+            ui.printError(e.getMessage());
+            ui.printWarning("Proposta scartata — nessun dato salvato.");
+            return;
+        }
+
+        ui.printSuccess("Proposta valida!");
+        ui.printBlank();
+        printProposalSummary(draft);
+
+        if (ui.readConfirm("Vuoi pubblicare questa proposta in bacheca?")) {
+            try {
+                proposalService.publish(draft,
+                        configService.getBaseFields(),
+                        fieldService.getCommonFields());
+                save();
+                ui.printSuccess("Proposta pubblicata! Titolo: " + draft.getTitle()
+                        + " | Categoria: " + draft.getCategory().getName());
+            } catch (InvalidProposalException e) {
+                ui.printError("Pubblicazione fallita: " + e.getMessage());
+                ui.printWarning("Proposta scartata.");
+            }
+        } else {
+            ui.printInfo("Proposta non pubblicata. Nessuna modifica salvata.");
+        }
+    }
+
+    public void handleViewBoard() {
+        ui.printTitle("Bacheca Iniziative");
+        ui.printMenu("Tutte le categorie", "Filtra per categoria");
+        int choice = ui.readInt("Scelta", 0, 2);
+        if (choice == 0) return;
+
+        String filter = null;
+        if (choice == 2) {
+            Category cat = pickCategory();
+            if (cat == null) return;
+            filter = cat.getName();
+        }
+
+        List<Proposal> board = proposalService.getBoardByCategory(filter);
+
+        if (board.isEmpty()) {
+            ui.printInfo("Bacheca vuota"
+                + (filter != null ? " per la categoria '" + filter + "'" : "") + ".");
+            return;
+        }
+
+        ui.printInfo("Proposte trovate: " + board.size());
+        ui.printBlank();
+
+        for (int i = 0; i < board.size(); i++) {
+            Proposal p = board.get(i);
+            ui.printSection("[" + (i + 1) + "] " + p.getTitle()
+                + "  —  " + p.getCategory().getName().toUpperCase());
+            ui.print(String.format("  %-28s %s", "Data evento:",        p.getEventDateStr()));
+            ui.print(String.format("  %-28s %s", "Ora:",                p.getFieldValues().getOrDefault("Ora", "—")));
+            ui.print(String.format("  %-28s %s", "Luogo:",              p.getPlace()));
+            ui.print(String.format("  %-28s %s", "Termine iscrizione:", p.getDeadlineStr()));
+            ui.print(String.format("  %-28s %s", "Partecipanti:",       p.getParticipantsStr()));
+            ui.print(String.format("  %-28s %s", "Quota individuale:",  p.getQuota()));
+            if (p.getPublishDate() != null)
+                ui.print(String.format("  %-28s %s", "Pubblicata il:",
+                    p.getPublishDate().format(
+                        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
+            ui.printBlank();
+        }
+    }
     // ================================================================
     // HELPERS PRIVATI
     // ================================================================
@@ -468,6 +600,22 @@ public class ConfiguratorController {
         return mandatory
                 ? ui.readString(fieldName + hint)
                 : ui.readOptionalString(fieldName + hint);
+    }
+
+    private void printProposalSummary(Proposal p) {
+        ui.printSection("Riepilogo proposta");
+        ui.print(String.format("  %-28s %s", "Titolo:",          p.getTitle()));
+        ui.print(String.format("  %-28s %s", "Categoria:",       p.getCategory().getName()));
+        ui.print(String.format("  %-28s %s", "Data evento:",     p.getEventDateStr()));
+        ui.print(String.format("  %-28s %s", "Luogo:",           p.getPlace()));
+        ui.print(String.format("  %-28s %s", "Termine iscriz.:", p.getDeadlineStr()));
+        ui.print(String.format("  %-28s %s", "Partecipanti:",    p.getParticipantsStr()));
+        ui.print(String.format("  %-28s %s", "Quota:",           p.getQuota()));
+        p.getFieldValues().forEach((k, v) -> {
+            if (!v.isBlank() && !isBaseFieldName(k))
+                ui.print(String.format("  %-28s %s", k + ":", v));
+        });
+        ui.printBlank();
     }
 
     private boolean isBaseFieldName(String name) {

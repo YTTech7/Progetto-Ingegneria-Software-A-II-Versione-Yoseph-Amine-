@@ -15,6 +15,7 @@ public class ApplicationState implements Serializable {
     private final List<BaseField>    baseFields     = new ArrayList<>();
     private final List<CommonField>  commonFields   = new ArrayList<>();
     private final List<Category>     categories     = new ArrayList<>();
+    private final List<Proposal>     proposals     = new ArrayList<>();
     private boolean baseFieldsLocked = false;
     
     // solo per il primo accesso 
@@ -93,5 +94,15 @@ public class ApplicationState implements Serializable {
     }
 
     public List<Category> getCategoriesMutable() { return categories; }
+    
+ // ----------------------------------------------------------------
+    // Proposte (V2)
+    // ----------------------------------------------------------------
+
+    public List<Proposal> getProposals() {
+        return Collections.unmodifiableList(proposals);
+    }
+
+    public List<Proposal> getProposalsMutable() { return proposals; }
     
 }
